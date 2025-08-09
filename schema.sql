@@ -81,6 +81,17 @@ CREATE TABLE IF NOT EXISTS admin_actions (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+INSERT INTO uploaded_document (action_type, details, tx_hash)
+VALUES
+('APPROVE_APPLICATION', '{"student_name": "Alice", "application_id": 101}', '0xabc123abc123abc123abc123abc123abc123abc1'),  
+('APPROVE_APPLICATION', '{"student_name": "Bob", "application_id": 102}', '0xabc124abc124abc124abc124abc124abc124abc2'),  
+('REJECT_APPLICATION', '{"reason"": ""Insufficient documents"", ""application_id"": 103}', '0xabc125abc125abc125abc125abc125abc125abc3'),  
+('REJECT_APPLICATION', '{"reason": "Not eligible", "application_id": 104}', '0xabc126abc126abc126abc126abc126abc126abc4'),  
+('"ADMIN_LOGIN"', '{"device": "Chrome on Windows", "ip_address": "192.168.1.10"}', '0xabc133abc133abc133abc133abc133abc133abd1'),  
+('"ADMIN_LOGIN"', '{"device": "Firefox on Mac", "ip_address": "192.168.1.11"}', '0xabc134abc134abc134abc134abc134abc134abd2'),  
+('"ADMIN_LOGOUT"', '{"ip_address": "192.168.1.10"}', '0xabc135abc135abc135abc135abc135abc135abd3'),  
+('"ADMIN_LOGOUT"', '{"ip_address": "192.168.1.11"}', '0xabc136abc136abc136abc136abc136abc136abd4');
+
 CREATE TABLE IF NOT EXISTS uploaded_document (
   document_id SERIAL PRIMARY KEY,
   app_id INTEGER REFERENCES applications(app_id),
