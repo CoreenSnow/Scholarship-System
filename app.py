@@ -135,7 +135,7 @@ def index():
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT id, student_name, student_wallet, amount_eth, status, created_at 
+        SELECT app_id, student_name, student_wallet, amount_eth, status, created_at 
         FROM applications ORDER BY id DESC
     """)
     rows = cur.fetchall()
@@ -261,14 +261,35 @@ def record_funding():
 
     return jsonify({'status': 'ok'})
 
+# Fixed payout amount (ETH)
+FIXED_AMOUNT_ETH = Decimal('0.05')
+
+def send_funds_to_student(recipient_wallet, amount_eth, admin_private_key):
+    amount_wei = w3.to_wei(amount_eth, 'ether')
+    admin_address = w3.eth.account.from_key(admin_private_key).address
+
+    txn = contract.functions.releaseFunds(
+        w3.to_checksum_address(recipient_wallet),
+        amount_wei
+    ).build_transaction({
+        'from': admin_address,
+        'nonce': w3.eth.get_transaction_count(admin_address),
+        'gas': 300000,
+        'gasPrice': w3.to_wei('2', 'gwei')
+    })
+
+    signed_txn = w3.eth.account.sign_transaction(txn, admin_private_key)
+    tx_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+    return tx_hash.hex()
+
 @app.route('/record_approval', methods=['POST'])
 @login_required
 def record_approval():
     data = request.json
     app_id = int(data.get('app_id'))
     tx_hash = data.get('tx_hash')
-    admin_wallet = data.get('admin_wallet')
 
+    # Verify on-chain transaction
     try:
         receipt = w3.eth.get_transaction_receipt(tx_hash)
     except Exception as e:
@@ -277,15 +298,20 @@ def record_approval():
     if receipt.get('status') != 1:
         return jsonify({'error': 'Transaction failed'}), 400
 
+    # Optional: check it was your contract and correct method
+    tx = w3.eth.get_transaction(tx_hash)
+    if tx['to'].lower() != contract.address.lower():
+        return jsonify({'error': 'Transaction not sent to your contract'}), 400
+
+    # Save only approval info — no admin wallet needed
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
-        UPDATE applications SET status='approved', approved_at = CURRENT_TIMESTAMP WHERE id=%s
-    """, (app_id,))
-    cur.execute("""
-        INSERT INTO admin_actions (admin_wallet, action_type, details, tx_hash)
-        VALUES (%s, %s, %s, %s)
-    """, (admin_wallet, 'approve', json.dumps({'app_id': app_id}), tx_hash))
+        UPDATE applications 
+        SET status='approved', approved_at = CURRENT_TIMESTAMP, tx_hash = %s
+        WHERE id=%s
+    """, (tx_hash, app_id))
+
     conn.commit()
     cur.close()
     conn.close()
